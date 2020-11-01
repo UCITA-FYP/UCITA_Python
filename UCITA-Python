@@ -1,0 +1,153 @@
+from kivy.app import App
+from kivy.uix.boxlayout import BoxLayout
+from kivy.uix.image import Image
+from kivy.clock import Clock
+from kivy.graphics.texture import Texture
+from kivy.uix.button import Button
+import pytesseract
+import argparse
+from googletrans import Translator
+import arabic_reshaper
+from bidi.algorithm import get_display
+from PIL import ImageDraw, ImageFont
+from PIL import Image as ImagePIL
+import numpy as np
+import cv2
+
+pytesseract.pytesseract.tesseract_cmd = 'C:\\Program Files\\Tesseract-OCR\\tesseract'
+translator = Translator()
+
+ap = argparse.ArgumentParser()
+ap.add_argument("-p", "--psm", type=int, default=6,
+                help="Tesseract PSM mode")
+args = vars(ap.parse_args())
+
+LangFrom = input('Translate from: ')
+LangTo = input('Translate To: ')
+
+ArrayLang = ['afrikaans', 'amharic', 'arabic', 'azerbaijani', 'belarusian', 'bengali', 'bosnian', 'bulgarian',
+             'catalan', 'cebuano', 'chinese (simplified)', 'chinese (traditional)', 'croatian', 'czech', 'danish',
+             'dutch', 'english', 'esperanto', 'estonian', 'finnish', 'french', 'galician', 'georgian', 'german',
+             'hebrew', 'hindi', 'hungarian', 'italian', 'japanese', 'javanese', 'kannada', 'kazakh', 'korean', 'khmer',
+             'kurdish', 'lao', 'latin', 'latvian', 'lithuanian', 'macedonian', 'malay', 'malayalam', 'maltese',
+             'marathi', 'myanmar', 'nepali', 'norwegian', 'pashto', 'polish', 'portuguese', 'romanian', 'russian',
+             'serbian', 'sinhala', 'slovak', 'slovenian', 'spanish', 'swahili', 'swedish', 'tajik', 'tamil', 'telugu',
+             'thai', 'turkish', 'ukrainian', 'urdu', 'uzbek', 'vietnamese', 'yiddish']
+indexLangFrom = ArrayLang.index(LangFrom)
+indexLangTo = ArrayLang.index(LangTo)
+ArrayOCR = [
+    "afr", "amh", "ara", "aze", "bel", "ben", "bos", "bul", "cat", "ceb", "chi_sim", "chi_tra", "hrv,", "ces", "dan",
+    "deu", "eng", "epo", "est", "fin", "fra", "glg", "kat", "frk", "heb", "hin""hun", "ita", "jpn", "jav", "kan", "kaz",
+    "kor", "khm", "kur", "lao", "lat", "lit", "mkd", "msa", "mal", "mlt", "mar", "mya", "nep", "nor", "pus", "pol",
+    "por", "ron", "rus", "srp", "sin", "slv", "slk", "spa", "swa", "swe", "tgk", "tam", "tel", "tha", "tur", "ukr",
+    "urd", "uzb", "vie", "yid"]
+
+ArrayText = ['af', 'am', 'ar', 'az', 'be', 'bn', 'bs', 'bg', 'ca', 'ceb', 'zh-cn', 'zh-tw', 'hr', 'cs', 'da', 'nl',
+             'en', 'eo', 'et', 'fr', 'fi', 'gl', 'ka', 'de', 'iw', 'hi', 'hu', 'it', 'ja', 'jw', 'kn', 'kk', 'ko', 'km',
+             'ku', 'lo', 'la', 'lv', 'lt', 'mk', 'ms', 'ml', 'mt', 'mr', 'my', 'ne', 'no', 'ps', 'pl', 'pt', 'ro', 'ru',
+             'sr', 'sk', 'sl', 'es', 'sw', 'sv', 'tg', 'ta', 'te', 'th', 'tr', 'uk', 'ur', 'uz', 'vi', 'yi']
+
+
+class CamApp(App):
+
+    def build(self):
+        self.title = 'Welcome to UCITA'
+        self.img1 = Image()
+        layout = BoxLayout(orientation='vertical')
+        layout.add_widget(self.img1)
+        self.capture = cv2.VideoCapture(0)
+        btn1 = Button(text='Capture', font_size="20",
+                      background_color=(0, 0, 1, 1),
+                      color=(1, 1, 1, 1),
+                      size=(32, 32),
+                      size_hint=(.2, .2))
+        btn1.bind(on_press=self.up)
+        layout.add_widget(btn1)
+        btn2 = Button(text='Snap', font_size="20",
+                      background_color=(0, 0, 1, 1),
+                      color=(1, 1, 1, 1),
+                      size=(32, 32),
+                      size_hint=(.2, .2))
+        btn2.bind(on_press=self.snapshot)
+        layout.add_widget(btn2)
+        return layout
+
+    def up(self, dt):
+        Clock.schedule_interval(self.update, 1.0 / 33.0)
+
+    def update(self, dt):
+        # display image from cam in opencv window
+        ret, frame = self.capture.read()
+        if ret:
+            buf1 = cv2.flip(frame, 0)
+            buf = buf1.tostring()
+            texture1 = Texture.create(size=(frame.shape[1], frame.shape[0]), colorfmt='bgr')
+            texture1.blit_buffer(buf, colorfmt='bgr', bufferfmt='ubyte')
+            self.img1.texture = texture1
+
+    def snapshot(self, dt):
+        ret, frame = self.capture.read()
+        self.capture.release()
+        if ret:
+            img_raw = frame.copy()
+            ROIs = cv2.selectROIs("Select Rois", img_raw)
+            print(ROIs)
+            for rect in ROIs:
+                x1 = rect[0]
+                y1 = rect[1]
+                x2 = rect[2]
+                y2 = rect[3]
+
+                # crop roi from original image
+                img_crop = img_raw[y1:y1 + y2, x1:x1 + x2]
+
+                # # show cropped image
+                cv2.destroyAllWindows()
+                gray = cv2.cvtColor(img_crop, cv2.COLOR_BGR2GRAY)
+                cv2.imshow('gray', gray)
+                options = "-l {} --psm {}".format(ArrayOCR[indexLangFrom], args["psm"])
+                text = pytesseract.image_to_string(gray, config=options)
+                # show the original OCR'd text
+                print("ORIGINAL")
+                print("========")
+                print(text)
+                print("")
+                textTranslate = translator.translate(text, src=ArrayText[indexLangFrom], dest=ArrayText[indexLangTo])
+                print('Translation')
+                print(f'source: {textTranslate.src}')
+                print(f'Destination: {textTranslate.dest}')
+                print(f'{textTranslate.text}')
+                print("")
+                cv2.rectangle(img_raw, (x1, y1), (x1 + x2, y1 + y2), (255, 0, 0), 2)
+                if LangTo == 'arabic':
+                    reshaped_text = arabic_reshaper.reshape(textTranslate.text)
+                    text = get_display(reshaped_text)
+                    al = "right"
+                    font_path = "arial.ttf"
+                    font = ImageFont.truetype(font_path, 40)
+                    img_pil = ImagePIL.fromarray(img_raw)
+                    draw = ImageDraw.Draw(img_pil)
+                    draw.rectangle((x1, y1, x1 + x2, y1 + y2), fill=(173, 171, 170))
+                    draw.text((x1, y1), text, font=font, align=al, fill=(255, 0, 0))
+                    img_raw = np.array(img_pil)
+                else:
+                    text = textTranslate.text
+                    al = "left"
+                    font_path = "arial.ttf"
+                    font = ImageFont.truetype(font_path, 40)
+                    img_pil = ImagePIL.fromarray(img_raw)
+                    draw = ImageDraw.Draw(img_pil)
+                    draw.rectangle((x1, y1, x1 + x2, y1 + y2), fill=(173, 171, 170))
+                    draw.text((x1, y1), text, font=font, align=al, fill=(255, 0, 0))
+                    img_raw = np.array(img_pil)
+
+            buf2 = cv2.flip(img_raw, 0)
+            buf = buf2.tostring()
+            texture2 = Texture.create(size=(img_raw.shape[1], img_raw.shape[0]), colorfmt='bgr')
+            texture2.blit_buffer(buf, colorfmt='bgr', bufferfmt='ubyte')
+            self.img1.texture = texture2
+
+
+if __name__ == '__main__':
+    CamApp().run()
+    cv2.destroyAllWindows()
